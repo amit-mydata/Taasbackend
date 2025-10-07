@@ -50,10 +50,72 @@ class AnalyzerService:
 
 
 
-    async def get_all_assessments(self) -> list:
+    # async def get_all_assessments(self) -> list:
+    #     """
+    #     Retrieve all assessments with proper aggregation and projection.
+    #     Returns a list of assessment documents.
+    #     """
+    #     try:
+    #         pipeline = [
+    #             {"$match": {"is_deleted": False}},
+    #             {"$sort": {"created_at": -1}},
+    #             {
+    #                 "$lookup": {
+    #                     "from": "analyzed_data",
+    #                     "localField": "_id",
+    #                     "foreignField": "candidate_id",
+    #                     "as": "result"
+    #                 }
+    #             },
+    #             {"$unwind": {"path": "$result"}},
+    #             {
+    #                 "$project": {
+    #                     "_id": 0,
+    #                     "updated_at": 0,
+    #                     "is_deleted": 0,
+    #                     "result._id": 0,
+    #                     "result.candidate_id": 0,
+    #                     "result.created_at": 0,
+    #                     "result.updated_at": 0,
+    #                     "result.is_deleted": 0
+    #                 }
+    #             }
+    #         ]
+    #         cursor = db.candidate.aggregate(pipeline)
+    #         results = []
+    #         async for doc in cursor:
+    #             # Extract required fields from the nested structure
+    #             result = doc.get("result", {})
+    #             communication_data = result.get("communication_data", {})
+    #             key_metrics = communication_data.get("key_metrics", {})
+    #             # Get date only (remove time if present)
+    #             created_at = doc.get("created_at", "")
+    #             date_only = created_at.date().isoformat()
+            
+
+    #             assessment = {
+    #                 "candidate_name": doc.get("candidate_name"),
+    #                 "email": doc.get("email"),
+    #                 "phone": doc.get("phone"),
+    #                 "communication_score": communication_data.get("communication_score"),
+    #                 "resume_score": result.get("analyze_answer_response", {}).get("match_score"),
+    #                 "overall_score": result.get("technical_data", {}).get("overall_score"),
+    #                 "technical_score": result.get("technical_data", {}).get("technical_score"),
+    #                 "status": result.get("technical_data", {}).get("fit"),
+    #                 "date": date_only
+    #             }
+    #             results.append(assessment)
+    #         return results
+    #     except Exception as e:
+    #         print("Error in aggregation:", e)
+    #         return []
+    async def get_all_assessments(self, skip: int = 0, limit: int = 10) -> tuple[list, int]:
         """
-        Retrieve all assessments with proper aggregation and projection.
-        Returns a list of assessment documents.
+        Retrieve paginated assessments with proper aggregation and projection.
+        
+        :param skip: Number of documents to skip
+        :param limit: Number of documents to return
+        :return: Tuple (list of assessments, total count of assessments)
         """
         try:
             pipeline = [
@@ -79,19 +141,20 @@ class AnalyzerService:
                         "result.updated_at": 0,
                         "result.is_deleted": 0
                     }
-                }
+                },
+                {"$skip": skip},
+                {"$limit": limit}
             ]
+
             cursor = db.candidate.aggregate(pipeline)
             results = []
+
             async for doc in cursor:
-                # Extract required fields from the nested structure
                 result = doc.get("result", {})
                 communication_data = result.get("communication_data", {})
-                key_metrics = communication_data.get("key_metrics", {})
-                # Get date only (remove time if present)
-                created_at = doc.get("created_at", "")
-                date_only = created_at.date().isoformat()
-            
+                
+                created_at = doc.get("created_at")
+                date_only = created_at.date().isoformat() if created_at else None
 
                 assessment = {
                     "candidate_name": doc.get("candidate_name"),
@@ -105,10 +168,16 @@ class AnalyzerService:
                     "date": date_only
                 }
                 results.append(assessment)
-            return results
+
+            # Get total count for pagination
+            total_count = await db.candidate.count_documents({"is_deleted": False})
+
+            return results, total_count
+
         except Exception as e:
             print("Error in aggregation:", e)
-            return []
+            return [], 0
+
 
     async def add_communication_data(self, candidate_id: str, communication_data: dict) -> bool:
         try:

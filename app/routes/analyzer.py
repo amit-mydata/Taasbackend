@@ -371,40 +371,92 @@ from fastapi.responses import JSONResponse
 from fastapi.encoders import jsonable_encoder
 
 
+# @analyze_router.get("/dashboard")
+# async def get_dashboard():
+#     try:
+#         try:
+#             # Fetch all assessments from MongoDB
+#             assessments = await analyzer_service.get_all_assessments()
+
+#         except Exception as e:
+#             import traceback
+#             traceback.print_exc()
+#             return JSONResponse(
+#                 status_code=status.HTTP_200_OK,
+#                 content=jsonable_encoder({
+#                     "status": True,
+#                     "data": {"recent_assessments": []},
+#                     "message": "No assessments found"
+#                 })
+#             )
+
+#         if not assessments or len(assessments) == 0:
+#             return JSONResponse(
+#                 status_code=status.HTTP_200_OK,
+#                 content=jsonable_encoder({
+#                     "status": True,
+#                     "data": {"recent_assessments": []},
+#                     "message": "No assessments found"
+#                 })
+#             )
+
+#         return JSONResponse(
+#             status_code=status.HTTP_200_OK,
+#             content=jsonable_encoder({
+#                 "status": True,
+#                 "data": {"recent_assessments": assessments},
+#                 "message": "Dashboard data fetched successfully"
+#             })
+#         )
+
+#     except Exception as e:
+#         import traceback
+#         traceback.print_exc()
+#         return JSONResponse(
+#             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+#             content=jsonable_encoder({
+#                 "status": False,
+#                 "message": "Something went wrong"
+#             })
+#         )
+    
 @analyze_router.get("/dashboard")
-async def get_dashboard():
+async def get_dashboard(page: int = Query(1, ge=1), per_page: int = Query(10, ge=1, le=100)):
     try:
-        try:
-            # Fetch all assessments from MongoDB
-            assessments = await analyzer_service.get_all_assessments()
+        skip_count = (page - 1) * per_page
 
-        except Exception as e:
-            import traceback
-            traceback.print_exc()
+        # Fetch paginated assessments
+        assessments, total_count = await analyzer_service.get_all_assessments(skip=skip_count, limit=per_page)
+
+        if not assessments:
             return JSONResponse(
                 status_code=status.HTTP_200_OK,
                 content=jsonable_encoder({
                     "status": True,
-                    "data": {"recent_assessments": []},
+                    "data": {
+                        "recent_assessments": [],
+                        "page": page,
+                        "per_page": per_page,
+                        "total_pages": 0,
+                        "total_count": 0
+                    },
                     "message": "No assessments found"
                 })
             )
 
-        if not assessments or len(assessments) == 0:
-            return JSONResponse(
-                status_code=status.HTTP_200_OK,
-                content=jsonable_encoder({
-                    "status": True,
-                    "data": {"recent_assessments": []},
-                    "message": "No assessments found"
-                })
-            )
+        total_pages = (total_count + per_page - 1) // per_page
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content=jsonable_encoder({
                 "status": True,
-                "data": {"recent_assessments": assessments},
+                "data": {
+                    "recent_assessments": assessments,
+                    "page": page,
+                    "per_page": per_page,
+                    "total_pages": total_pages,
+                    "total_count": total_count
+                },
                 "message": "Dashboard data fetched successfully"
             })
         )
@@ -419,3 +471,5 @@ async def get_dashboard():
                 "message": "Something went wrong"
             })
         )
+
+
