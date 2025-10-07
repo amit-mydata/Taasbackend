@@ -167,7 +167,7 @@ async def transcribe_audio(audio_file_path: str):
 async def generate_quiz_with_gemini(job_description: str, resume_content: str):
     try:
         system_prompt = f"""
-            You are an AI Quiz Generator.
+            You are an AI Quiz Generator for interview assessments.
             Your task is to analyze the provided job description and resume, and return a JSON object with the following fields:
 
             {{
@@ -185,6 +185,20 @@ async def generate_quiz_with_gemini(job_description: str, resume_content: str):
             - Generate exactly 10 quiz questions.
             - Each question must have 4 options and only 1 correct answer.
             - Questions should be relevant to the job description and resume content.
+            - **IMPORTANT: Frame ALL questions in second person ("you", "your") as if directly asking the candidate in an interview.**
+            - Use phrases like:
+            * "What would you choose..."
+            * "How would you approach..."
+            * "What is your understanding of..."
+            * "Which option would you select..."
+            * "What would be your first step..."
+            
+            ### Example Question Format
+             INCORRECT: "For this code, (candidate name) will be what choose first"
+             CORRECT: "For this code, what would you choose first?"
+            
+             INCORRECT: "What is the purpose of this function?"
+             CORRECT: "What would you say is the purpose of this function?"
 
             ### Input
             Job Description: {job_description}
@@ -227,32 +241,81 @@ async def generate_quiz_with_gemini(job_description: str, resume_content: str):
 async def generate_interview_questions(job_description: str, resume_content: str):
     try:
         system_prompt = f"""
-            You are an AI Interview Question & Answer Generator.
-            Your task is to generate 5 interview questions and their answers based on the provided job description and resume content.
+            You are an expert Technical Interview Preparation Assistant. Your task is to generate 5 highly targeted interview questions with comprehensive answers based on the candidate's resume and the specific job description.
 
-            ### Requirements
-            - Generate exactly 5 interview questions.
-            - For each question, provide a concise and relevant answer.
-            - Questions should cover System Design, Code Review, Problem Solving, Database Design, and Performance Optimization.
-            - Each question and answer should be relevant to the job description and resume content.
+            Analysis Requirements
+            First, carefully analyze:
+            1. Job Requirement : Key technical skills, years of experience, specific technologies, and role responsibilities mentioned in the job description
+            2. Candidate Profil : Technical expertise, project experience, tools/frameworks used, and achievements from the resume
+            3. Skill Gaps & Strength : Identify alignment and potential areas where the candidate might be questioned
 
-            ### Input
-            Job Description: {job_description}
-            Resume Content: {resume_content}
+            Question Generation Guidelines
+            Generate exactly 5 questions that:
+            - Reflect Real Interview Scenario : Frame questions as they would be asked by actual interviewers
+            - Match Seniority Leve : Adjust complexity based on the role level (junior/mid/senior/lead)
+            - Cover Diverse Categorie : 
+            System Design (architecture, scalability, trade-offs)
+            Code Review/Best Practices (code quality, maintainability)
+            Problem Solving (algorithmic thinking, debugging)
+            Database Design (schema design, query optimization)
+            Performance Optimization (bottlenecks, monitoring, improvement strategies)
+            - Leverage Resume Contex : Reference candidate's actual projects or technologies when relevant
+            - Test Depth of Knowledg : Go beyond surface-level questions to assess true understanding
 
-            ### Output
-            Return only a JSON object in the following format, without additional commentary:
+            Answer Guidelines
+            For each answer, provide:
+            - Structured Respons : Start with a direct answer, then elaborate with details
+            - Demonstrate Expertis : Show deep understanding relevant to the candidate's experience level
+            - Use Specific Example : Reference technologies, patterns, or approaches mentioned in the resume when applicable
+            - Include Best Practice : Mention industry standards, common pitfalls, and recommended approaches
+            - Show Problem-Solving Proces : For technical questions, outline the thinking process
+            - Lengt : 4-6 sentences that are substantive and interview-ready
+
+            Input Context Job Description 
+            {job_description}
+            Candidate's Resume 
+            {resume_content}
+
+            Output Format
+            Return ONLY a valid JSON object with no additional text, markdown formatting, or code blocks:
+
             {{
-                "questions": [
-                    {{
-                        "question": "<question text>",
-                        "answer": "<answer text>"
-                    }},
-                    ...
-                    (total 5)
-                ]
+            "questions": [
+                {{
+                "category": "<System Design|Code Review|Problem Solving|Database Design|Performance Optimization>",
+                "question": "<Realistic interview question text>",
+                "answer": "<Comprehensive, well-structured answer demonstrating expertise>"
+                }},
+                {{
+                "category": "<different category>",
+                "question": "<question text>",
+                "answer": "<answer text>"
+                }},
+                {{
+                "category": "<different category>",
+                "question": "<question text>",
+                "answer": "<answer text>"
+                }},
+                {{
+                "category": "<different category>",
+                "question": "<question text>",
+                "answer": "<answer text>"
+                }},
+                {{
+                "category": "<different category>",
+                "question": "<question text>",
+                "answer": "<answer text>"
+                }}
+            ]
             }}
-        """
+
+            Critical Rules
+            - Each question must be from a DIFFERENT category
+            - Questions should progressively increase in complexity
+            - Answers must sound natural and conversational, not robotic
+            - Avoid generic questions that could apply to any role
+            - Ensure JSON is properly formatted and parseable
+            """
 
         class InterviewQA(BaseModel):
             question: str = Field(description="Interview question text")
@@ -281,29 +344,50 @@ async def generate_interview_questions(job_description: str, resume_content: str
 async def generate_interview_text_questions_questions(job_description: str, resume_content: str):
     try:
         system_prompt = f"""
-            You are an **AI Interview Question & Answer Generator**. 
-            Your role is to create **exactly 5 structured interview questions and answers** tailored to the given job description and candidate’s resume.
+            You are an AI Interview Question & Answer Generator for technical recruiting. Your role is to create exactly 5 structured, role-specific interview questions and answers based on the candidate's resume and target job description.
 
-            ### Instructions
-            - Generate **exactly 5** interview questions.
-            - Each question must be **clear, specific, and relevant** to both the job description and the candidate’s resume.
-            - Each answer must be **concise (2–4 sentences)**, professional, and aligned with the candidate’s skills and experience.
-            - Focus on **technical expertise, problem-solving, past experience, and role-specific competencies**.
-            - Do not include filler or generic questions (e.g., “Tell me about yourself”).
-            - Strictly output in **valid JSON** matching the schema below.
+            Core Principles
+            - Relevance: Every question must directly relate to skills, technologies, or experiences mentioned in BOTH the resume and job description
+            - Specificity: Questions should reference actual projects, technologies, or achievements from the candidate's resume
+            - Depth: Focus on technical depth, problem-solving approach, and real-world application
+            - Authenticity: Answers should reflect what the candidate would realistically say based on their documented experience
 
-            ### Input
-            Job Description: {job_description}
-            Resume Content: {resume_content}
+            Question Guidelines
+            1. Technical Deep-Dive: Ask about specific technologies, frameworks, or tools listed in both documents
+            2. Experience-Based: Reference actual projects or roles from the resume
+            3. Problem-Solving: Include scenario-based questions relevant to the target role
+            4. Impact & Results: Focus on measurable outcomes and contributions
+            5. Role Alignment: Ensure questions match the seniority level and responsibilities of the job
 
-            ### Output Format
-            Return ONLY a JSON object in this exact structure, with no extra commentary:
+            Answer Guidelines
+            - Length: 3-5 sentences per answer
+            - Structure: Use STAR format where applicable (Situation, Task, Action, Result)
+            - Voice: Professional, confident, and conversational (first-person perspective)
+            - Specificity: Include concrete examples, metrics, and technical details from the resume
+            - Alignment: Demonstrate clear fit between candidate's experience and job requirements
+
+            Avoid
+            - Generic questions ("Tell me about yourself", "What are your strengths?")
+            - Questions about information not present in either document
+            - Overly simple yes/no questions
+            - Hypothetical scenarios unrelated to the candidate's background
+            - Buzzwords without substance
+
+            Input Data
+            Job Description:
+            {job_description}
+
+            Candidate Resume:
+            {resume_content}
+
+            Output Format
+            Return ONLY a valid JSON object with no additional text, commentary, or markdown formatting:
 
             {{
             "questions": [
                 {{
-                "question": "string",
-                "answer": "string"
+                "question": "string - specific, role-relevant interview question",
+                "answer": "string - detailed 3-5 sentence response in first-person"
                 }},
                 {{
                 "question": "string",
@@ -323,7 +407,9 @@ async def generate_interview_text_questions_questions(job_description: str, resu
                 }}
             ]
             }}
-        """
+
+            **IMPORTANT**: Output must be valid JSON only. No explanatory text before or after the JSON object.
+            """
 
         class InterviewQA(BaseModel):
             question: str = Field(description="Interview question text")

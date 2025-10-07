@@ -22,7 +22,94 @@ class AnalyzerService:
 
         except Exception as e:
             raise HTTPException(status_code=500, detail="Internal Server Error")
-        
+
+    async def store_analyzed_data_with_candidate_id(self, candidate_id: str, technical_data: dict, communication_data: dict = None) -> bool:
+        """
+        Stores analyzed data for a candidate by candidate_id.
+        If a document with the candidate_id exists, update it; otherwise, insert a new one.
+        """
+        try:
+            query = {'candidate_id': ObjectId(candidate_id)}
+            update_doc = {
+                '$set': {
+                    'technical_data': technical_data
+                }
+            }
+            if communication_data is not None:
+                update_doc['$set']['communication_data'] = communication_data
+
+            result = await db.analyzed_data.update_one(
+                query,
+                update_doc,
+                upsert=True
+            )
+            return True
+        except Exception as e:
+            print(f"Failed to store analyzed data for candidate {candidate_id}: {e}")
+            raise HTTPException(status_code=500, detail="Internal Server Error")
+
+
+
+    async def get_all_assessments(self) -> list:
+        """
+        Retrieve all assessments with proper aggregation and projection.
+        Returns a list of assessment documents.
+        """
+        try:
+            pipeline = [
+                {"$match": {"is_deleted": False}},
+                {"$sort": {"created_at": -1}},
+                {
+                    "$lookup": {
+                        "from": "analyzed_data",
+                        "localField": "_id",
+                        "foreignField": "candidate_id",
+                        "as": "result"
+                    }
+                },
+                {"$unwind": {"path": "$result"}},
+                {
+                    "$project": {
+                        "_id": 0,
+                        "updated_at": 0,
+                        "is_deleted": 0,
+                        "result._id": 0,
+                        "result.candidate_id": 0,
+                        "result.created_at": 0,
+                        "result.updated_at": 0,
+                        "result.is_deleted": 0
+                    }
+                }
+            ]
+            cursor = db.candidate.aggregate(pipeline)
+            results = []
+            async for doc in cursor:
+                # Extract required fields from the nested structure
+                result = doc.get("result", {})
+                communication_data = result.get("communication_data", {})
+                key_metrics = communication_data.get("key_metrics", {})
+                # Get date only (remove time if present)
+                created_at = doc.get("created_at", "")
+                date_only = created_at.date().isoformat()
+            
+
+                assessment = {
+                    "candidate_name": doc.get("candidate_name"),
+                    "email": doc.get("email"),
+                    "phone": doc.get("phone"),
+                    "communication_score": communication_data.get("communication_score"),
+                    "resume_score": result.get("analyze_answer_response", {}).get("match_score"),
+                    "overall_score": result.get("technical_data", {}).get("overall_score"),
+                    "technical_score": result.get("technical_data", {}).get("technical_score"),
+                    "status": result.get("technical_data", {}).get("fit"),
+                    "date": date_only
+                }
+                results.append(assessment)
+            return results
+        except Exception as e:
+            print("Error in aggregation:", e)
+            return []
+
     async def add_communication_data(self, candidate_id: str, communication_data: dict) -> bool:
         try:
             result = await db.analyzed_data.update_one(

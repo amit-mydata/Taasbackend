@@ -303,12 +303,28 @@ async def get_technical_data(request: Request, candidate_uid: str = Query(...)):
 
         overall_score = (mcq_percentage + coding_percentage + text_percentage) / 3
 
+        # Store the technical score (overall_score) in MongoDB for this candidate
+        try:
+            # The store_analyzed_data_with_candidate_id expects a dict, not a float.
+            technical_data_to_store = {
+                "overall_score": overall_score,
+                "experience_based": Experience_Based,
+                "coding_percentage": coding_percentage,
+                "text_percentage": text_percentage
+            }
+            await analyzer_service.store_analyzed_data_with_candidate_id(candidate_uid, technical_data_to_store)
+        except Exception as e:
+            print(f"Failed to store technical score for candidate {candidate_uid}: {e}")
+
+
         teachnical_data = {
             "experience_based": Experience_Based,
             "coding_percentage": coding_percentage,
             "text_percentage": text_percentage,
             "overall_score": overall_score
         }
+
+
 
         resume_score = analyze_answer_response.get("match_score")
         communication_score = analyze_answer_response.get("communication_score")
@@ -322,6 +338,19 @@ async def get_technical_data(request: Request, candidate_uid: str = Query(...)):
             "main_score": main_score,
             "fit": fit
         }
+
+         # Store the technical score (overall_score) in MongoDB for this candidate
+        try:
+            # The store_analyzed_data_with_candidate_id expects a dict, not a float.
+            technical_data_to_store = {
+                "technical_score": overall_score,
+                "overall_score": main_score,
+                "fit": fit
+            }
+            await analyzer_service.store_analyzed_data_with_candidate_id(candidate_uid, technical_data_to_store)
+        except Exception as e:
+            print(f"Failed to store technical score for candidate {candidate_uid}: {e}")
+        
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={
@@ -339,4 +368,58 @@ async def get_technical_data(request: Request, candidate_uid: str = Query(...)):
                 "status": False,
                 "message": "Something went wrong"
             }
+        )
+
+from fastapi import status
+from fastapi.responses import JSONResponse
+from fastapi.encoders import jsonable_encoder
+
+
+@analyze_router.get("/dashboard")
+async def get_dashboard():
+    try:
+        try:
+            # Fetch all assessments from MongoDB
+            assessments = await analyzer_service.get_all_assessments()
+
+        except Exception as e:
+            import traceback
+            traceback.print_exc()
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content=jsonable_encoder({
+                    "status": True,
+                    "data": {"recent_assessments": []},
+                    "message": "No assessments found"
+                })
+            )
+
+        if not assessments or len(assessments) == 0:
+            return JSONResponse(
+                status_code=status.HTTP_200_OK,
+                content=jsonable_encoder({
+                    "status": True,
+                    "data": {"recent_assessments": []},
+                    "message": "No assessments found"
+                })
+            )
+
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content=jsonable_encoder({
+                "status": True,
+                "data": {"recent_assessments": assessments},
+                "message": "Dashboard data fetched successfully"
+            })
+        )
+
+    except Exception as e:
+        import traceback
+        traceback.print_exc()
+        return JSONResponse(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            content=jsonable_encoder({
+                "status": False,
+                "message": "Something went wrong"
+            })
         )

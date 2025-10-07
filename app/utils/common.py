@@ -65,9 +65,9 @@ async def process_quiz_questions(candidate_id: str, job_description: str, extrac
 
 async def calculate_overall_score(resume, communication, technical):
 
-    weight_resume=30
-    weight_comm=20
-    weight_tech=50
+    weight_resume=40
+    # weight_comm=20
+    weight_tech=60
 
     if resume is None:
         resume = 0
@@ -76,14 +76,20 @@ async def calculate_overall_score(resume, communication, technical):
     if technical is None:
         technical = 0
     
-    total_weight = weight_resume + weight_comm + weight_tech
+    # total_weight = weight_resume + weight_comm + weight_tech
+    total_weight = weight_resume + weight_tech
     score = (
         (resume * weight_resume) +
-        (communication * weight_comm) +
+        # (communication * weight_comm) +
         (technical * weight_tech)
     ) / total_weight
     score = round(score, 2)
 
-    # Category mapping
-    status = "Fit" if score >= 80 else "Not a Fit"
+    # Category mapping for fit status
+    if score >= 85:
+        status = "Strong Fit"
+    elif score >= 70:
+        status = "Potential Fit"
+    else:
+        status = "Not a Fit"
     return score, status
