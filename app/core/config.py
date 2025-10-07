@@ -11,7 +11,7 @@ class Settings(BaseSettings):
     GEMINI_API_KEY : str = os.environ.get("GEMINI_API_KEY")
     MONGO_URI: str = os.environ.get("MONGO_URI")
     MONGO_DB_NAME: str = os.environ.get("MONGO_DB_NAME")
-
+    REDIS_URL: str = os.environ.get("REDIS_URL")
     BACKEND_CORS_ORIGINS: List = []
 
     @validator("BACKEND_CORS_ORIGINS", pre=True, allow_reuse=True)
