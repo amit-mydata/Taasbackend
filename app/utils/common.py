@@ -1,4 +1,5 @@
 import uuid
+import asyncio
 from app.utils.llm import generate_quiz_with_gemini, generate_interview_questions, generate_interview_text_questions_questions
 from app.services.analyzer import AnalyzerService
 analyzer_service = AnalyzerService()
@@ -8,15 +9,18 @@ async def process_quiz_questions(candidate_id: str, job_description: str, extrac
     Runs in background: generate quiz questions and save to DB (or log).
     """
     try:
-        quiz_response = await generate_quiz_with_gemini(job_description, extracted_text)
+        print("Generating Quiz Questions...")
+        quiz_response, interview_questions, text_questions = await asyncio.gather(
+            generate_quiz_with_gemini(job_description, extracted_text),
+            generate_interview_questions(job_description, extracted_text),
+            generate_interview_text_questions_questions(job_description, extracted_text)
+        )
+
         print("Generated Quiz Response:", quiz_response)  
-
-        interview_questions = await generate_interview_questions(job_description, extracted_text)
         print("Generated Interview Questions:", interview_questions)  
-
-        text_questions = await generate_interview_text_questions_questions(job_description, extracted_text)
         print("Generated Interview Text Questions:", text_questions)
 
+        quiz_list = []
         # Collect all quiz items
         if candidate_id and quiz_response and "quiz" in quiz_response:
             quiz_list = []

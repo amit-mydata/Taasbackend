@@ -6,13 +6,10 @@ import tempfile
 import fitz  
 import uuid
 import asyncio
-import time
 from app.utils.llm import analyze_resume_with_gemini, transcribe_audio, score_interview_answer, analyze_answer_with_gemini
 from app.models.analyzer import SingleQuizQuestion
 from app.utils.common import process_quiz_questions, calculate_overall_score
 from app.services.analyzer import AnalyzerService
-from fastapi import BackgroundTasks
-from bson import ObjectId
 
 analyze_router = APIRouter()
 analyzer_service = AnalyzerService()
@@ -21,7 +18,6 @@ analyzer_service = AnalyzerService()
 @analyze_router.post("/upload")
 async def upload(
     request: Request,
-    background_tasks: BackgroundTasks,
     candidate_name: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
@@ -75,7 +71,7 @@ async def upload(
         })
 
         candidate_id_str = str(candidate_id)
-        background_tasks.add_task(process_quiz_questions, candidate_id_str, job_description, extracted_text)
+        asyncio.create_task(process_quiz_questions(candidate_id_str, job_description, extracted_text))
 
 
         result = {
