@@ -9,8 +9,11 @@ from bson import ObjectId
 
 class CreateCandidate(BaseModel):
     candidate_name: Optional[str] = Field(None)
+    user_id: str
     email: Optional[EmailStr] = Field(None)    
     phone: Optional[str] = Field(None)
+    hr_name: Optional[str] = Field(None)
+    job_position: Optional[str] = Field(None)
 
 class AddCandidate(CreateCandidate):
     created_at: datetime = Field(default_factory=datetime.utcnow)
@@ -20,6 +23,7 @@ class AddCandidate(CreateCandidate):
 
 class AnalyzedData(BaseModel):
     candidate_id: str
+    user_id: str
     resume_text: str
     job_description: str
     analyze_answer_response: Optional[dict] = Field(None)

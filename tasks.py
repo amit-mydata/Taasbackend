@@ -13,7 +13,7 @@ def process_job_task(candidate_id_str,job_description,extracted_text):
     
     async def _process_job_task(candidate_id_str,job_description,extracted_text):
         try:
-            process_quiz_questions(candidate_id_str,job_description,extracted_text)
+            await process_quiz_questions(candidate_id_str,job_description,extracted_text)
         except Exception as e:
             # Best-effort background job; failures are not propagated to the client
             print(f"Error in _process_job: {str(e)}")

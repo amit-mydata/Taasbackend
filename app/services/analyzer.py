@@ -2,13 +2,15 @@ from app.utils.mongo import db
 from fastapi import HTTPException
 from app.models.analyzer import AddCandidate, AddAnalyzedData
 from bson import ObjectId
+from bson import ObjectId
 
 class AnalyzerService:
 
     async def add_candidate_info(self, candidate: dict) -> bool:        
         try:
-            candidate_data = AddCandidate(**candidate)
-            result = await db.candidate.insert_one(candidate_data.dict())
+            candidate_data = AddCandidate(**candidate).dict()
+            candidate_data['user_id'] = ObjectId(candidate_data['user_id'])
+            result = await db.candidate.insert_one(candidate_data)
             return str(result.inserted_id)
         except Exception as e:
             raise HTTPException(status_code=500, detail="Internal Server Error")
@@ -17,6 +19,7 @@ class AnalyzerService:
         try:
             analyzed_data = AddAnalyzedData(**analyzed_data).dict()
             analyzed_data['candidate_id'] = ObjectId(analyzed_data['candidate_id'])
+            analyzed_data['user_id'] = ObjectId(analyzed_data['user_id'])
             await db.analyzed_data.insert_one(analyzed_data)
             return True
 
@@ -109,7 +112,9 @@ class AnalyzerService:
     #     except Exception as e:
     #         print("Error in aggregation:", e)
     #         return []
-    async def get_all_assessments(self, skip: int = 0, limit: int = 10) -> tuple[list, int]:
+
+
+    async def get_all_assessments(self, skip: int, limit: int, search: str,user_id: str) -> list:
         """
         Retrieve paginated assessments with proper aggregation and projection.
         
@@ -118,8 +123,25 @@ class AnalyzerService:
         :return: Tuple (list of assessments, total count of assessments)
         """
         try:
+            if isinstance(user_id, str):
+                user_id = ObjectId(user_id)     
+            
+            print("user_id",user_id)
+            print("Type os user_id",type(user_id))
+            print("Search ",search) 
+
+            match_filter = {"is_deleted": False, "user_id": user_id}
+
+            if search and search.strip():
+                match_filter["$or"] = [
+                    {"job_position": {"$regex": search, "$options": "i"}},
+                    {"hr_name": {"$regex": search, "$options": "i"}},
+                    {"candidate_name": {"$regex": search, "$options": "i"}},
+                    {"email": {"$regex": search, "$options": "i"}}
+                ]
+
             pipeline = [
-                {"$match": {"is_deleted": False}},
+                {"$match": match_filter},
                 {"$sort": {"created_at": -1}},
                 {
                     "$lookup": {
@@ -160,6 +182,8 @@ class AnalyzerService:
                     "candidate_name": doc.get("candidate_name"),
                     "email": doc.get("email"),
                     "phone": doc.get("phone"),
+                    "hr_name": doc.get("hr_name"),
+                    "job_position": doc.get("job_position"),
                     "communication_score": communication_data.get("communication_score"),
                     "resume_score": result.get("analyze_answer_response", {}).get("match_score"),
                     "overall_score": result.get("technical_data", {}).get("overall_score"),

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, File, Form, UploadFile, Request, HTTPException, status, Query, Body
+from fastapi import APIRouter,Depends, File, Form, UploadFile, Request, HTTPException, status, Query, Body
 from fastapi.responses import JSONResponse
 from typing import List
 import os
@@ -8,9 +8,10 @@ import uuid
 import asyncio
 from app.utils.llm import analyze_resume_with_gemini, transcribe_audio, score_interview_answer, analyze_answer_with_gemini
 from app.models.analyzer import SingleQuizQuestion
-from app.utils.common import calculate_overall_score
+from app.utils.common import calculate_overall_score , extract_text_and_tables
 from app.services.analyzer import AnalyzerService
 from tasks import process_job_task
+from app.utils.auth import get_current_user
 
 analyze_router = APIRouter()
 analyzer_service = AnalyzerService()
@@ -22,11 +23,15 @@ async def upload(
     candidate_name: str = Form(...),
     email: str = Form(...),
     phone: str = Form(...),
+    hr_name: str = Form(...),
+    job_position: str = Form(...),    
     job_description: str = Form(...),
-    resume: UploadFile = File(...)
+    resume: UploadFile = File(...),
+    current_user=Depends(get_current_user)
 ):
     try:
         candidate_data = await analyzer_service.get_candidate_by_email(email)
+        user_id = str(current_user["_id"])
 
         if candidate_data:
             return JSONResponse(
@@ -35,12 +40,14 @@ async def upload(
             )
         candidate_id = await analyzer_service.add_candidate_info({
             "candidate_name": candidate_name,
+            "user_id": user_id,
             "email": email,
             "phone": phone,
+            "hr_name": hr_name,
+            "job_position": job_position
         })
 
-        # Save uploaded resume to a temporary location
-        suffix = os.path.splitext(resume.filename)[-1]
+        suffix = os.path.splitext(resume.filename)[-1].lower()
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
             temp_file_path = tmp.name
             content = await resume.read()
@@ -48,17 +55,22 @@ async def upload(
 
         extracted_text = ""
 
-        # Process PDF resume
-        if suffix.lower() == ".pdf":
+        # Process based on file type
+        if suffix == ".pdf":
             doc = fitz.open(temp_file_path)
             extracted_text = "".join(page.get_text("text") for page in doc)
             doc.close()
+
+        elif suffix == ".docx":
+            extracted_text = extract_text_and_tables(temp_file_path)
+
         else:
+            os.remove(temp_file_path)
             raise HTTPException(
                 status_code=400,
-                detail="Only PDF resumes are supported right now."
+                detail="Only PDF and DOCX resumes are supported right now."
             )
-    
+
         # Cleanup temp file
         os.remove(temp_file_path)
 
@@ -66,6 +78,7 @@ async def upload(
 
         await analyzer_service.add_analyzed_data({
             "candidate_id": candidate_id,
+            "user_id": user_id,
             "resume_text": extracted_text,
             "job_description": job_description,
             "analyze_answer_response": response,
@@ -81,9 +94,12 @@ async def upload(
 
         result = {
             "candidate_id": candidate_id_str,
+            "user_id": user_id,
             "candidate_name": candidate_name,
             "email": email,
             "phone": phone,
+            "hr_name": hr_name,
+            "job_position": job_position,
             "job_description": job_description,
             "analysis": response, 
         }
@@ -113,9 +129,12 @@ async def submit_all_answers(
     request: Request,
     candidate_id: str = Form(...),
     question_texts: List[str] = Form(...), 
-    recordings: List[UploadFile] = None
+    recordings: List[UploadFile] = None,
+    current_user=Depends(get_current_user)
 ):
     try:
+        user_id = str(current_user["_id"])
+
         answers_batch = []
         temp_folder = "temp_audio"
         os.makedirs(temp_folder, exist_ok=True)
@@ -144,6 +163,7 @@ async def submit_all_answers(
             status_code=status.HTTP_200_OK,
             content={
                 "status": True,
+                "user_id": user_id,
                 "data": data,
                 "message": "Answers analyzed successfully"
             }
@@ -163,10 +183,12 @@ async def submit_all_answers(
 async def submit_single_answer(
     request: Request,
     data: SingleQuizQuestion = Body(...),
+    current_user=Depends(get_current_user)
 ):
     try:
         candidate_uid = data.candidate_uid
         quiz_id = data.quiz_id
+        user_id = str(current_user["_id"])
         user_answer = data.user_answer
         question_type = data.type
 
@@ -199,6 +221,7 @@ async def submit_single_answer(
             status_code=status.HTTP_200_OK,
             content={
                 "status": True,
+                "user_id": user_id,
                 # "data": data,
                 "message": "Answer analyzed successfully"
             }
@@ -215,9 +238,10 @@ async def submit_single_answer(
         )
     
 @analyze_router.get("/get-quiz-questions")
-async def get_quiz_questions(request: Request, candidate_uid: str = Query(...)):
+async def get_quiz_questions(request: Request, candidate_uid: str = Query(...),current_user=Depends(get_current_user)):
     try:
         data = await analyzer_service.get_quiz_questions(candidate_uid)
+        user_id = str(current_user["_id"])
         count = 0
         if count > 5:
             return JSONResponse(
@@ -233,6 +257,7 @@ async def get_quiz_questions(request: Request, candidate_uid: str = Query(...)):
                     status_code=status.HTTP_200_OK,
                     content={
                         "status": True,
+                        "user_id": user_id,
                         "data": data,
                         "message": "Questions fetched successfully"
                     }
@@ -252,10 +277,11 @@ async def get_quiz_questions(request: Request, candidate_uid: str = Query(...)):
         )
 
 @analyze_router.get("/get-technical-data")
-async def get_technical_data(request: Request, candidate_uid: str = Query(...)):
+async def get_technical_data(request: Request, candidate_uid: str = Query(...),current_user=Depends(get_current_user)):
     try:
 
         candidate_analysis = await analyzer_service.get_candidate_analysis_by_id(candidate_uid)  
+        user_id = str(current_user["_id"])
         candidate_data = await analyzer_service.get_candidate_by_id(candidate_uid)
         # print(candidate_analysis)
         analyze_answer_response = candidate_analysis.get("analyze_answer_response")
@@ -356,6 +382,7 @@ async def get_technical_data(request: Request, candidate_uid: str = Query(...)):
             status_code=status.HTTP_200_OK,
             content={
                 "status": True,
+                "user_id": user_id,                
                 "data": final_data,
                 "message": " Questions fetched successfully"
             }
@@ -426,12 +453,13 @@ from fastapi.encoders import jsonable_encoder
 #         )
     
 @analyze_router.get("/dashboard")
-async def get_dashboard(page: int = Query(1, ge=1), per_page: int = Query(10, ge=1, le=100)):
+async def get_dashboard(page: int = Query(1, ge=1), per_page: int = Query(10, ge=1, le=100), search: str = Query(None), current_user=Depends(get_current_user)):
     try:
         skip_count = (page - 1) * per_page
+        user_id = str(current_user["_id"])
 
         # Fetch paginated assessments
-        assessments, total_count = await analyzer_service.get_all_assessments(skip=skip_count, limit=per_page)
+        assessments, total_count = await analyzer_service.get_all_assessments(skip=skip_count, limit=per_page, search=search, user_id=user_id)
 
         if not assessments:
             return JSONResponse(
@@ -439,6 +467,7 @@ async def get_dashboard(page: int = Query(1, ge=1), per_page: int = Query(10, ge
                 content=jsonable_encoder({
                     "status": True,
                     "data": {
+                        "user_id": user_id,
                         "recent_assessments": [],
                         "page": page,
                         "per_page": per_page,
@@ -456,6 +485,7 @@ async def get_dashboard(page: int = Query(1, ge=1), per_page: int = Query(10, ge
             content=jsonable_encoder({
                 "status": True,
                 "data": {
+                    "user_id": user_id,
                     "recent_assessments": assessments,
                     "page": page,
                     "per_page": per_page,

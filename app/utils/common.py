@@ -4,6 +4,26 @@ from app.utils.llm import generate_quiz_with_gemini, generate_interview_question
 from app.services.analyzer import AnalyzerService
 analyzer_service = AnalyzerService()
 
+from docx import Document
+def extract_text_and_tables(file_path: str) -> str:
+    """Extract paragraphs and tables from a DOCX file."""
+    doc = Document(file_path)
+    text = []
+
+    # Extract paragraphs
+    for para in doc.paragraphs:
+        if para.text.strip():
+            text.append(para.text.strip())
+
+    # Extract tables
+    for table in doc.tables:
+        for row in table.rows:
+            row_data = [cell.text.strip() for cell in row.cells if cell.text.strip()]
+            if row_data:
+                text.append("\t".join(row_data))
+
+    return "\n".join(text)
+
 async def process_quiz_questions(candidate_id: str, job_description: str, extracted_text: str):
     """
     Runs in background: generate quiz questions and save to DB (or log).
