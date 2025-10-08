@@ -8,10 +8,12 @@ import uuid
 import asyncio
 from app.utils.llm import analyze_resume_with_gemini, transcribe_audio, score_interview_answer, analyze_answer_with_gemini
 from app.models.analyzer import SingleQuizQuestion
-from app.utils.common import calculate_overall_score , extract_text_and_tables
+from app.utils.common import calculate_overall_score , extract_text_and_tables, convert_objectids
 from app.services.analyzer import AnalyzerService
 from tasks import process_job_task
 from app.utils.auth import get_current_user
+from fastapi.encoders import jsonable_encoder
+
 
 analyze_router = APIRouter()
 analyzer_service = AnalyzerService()
@@ -33,11 +35,11 @@ async def upload(
         candidate_data = await analyzer_service.get_candidate_by_email(email)
         user_id = str(current_user["_id"])
 
-        if candidate_data:
-            return JSONResponse(
-                status_code=status.HTTP_400_BAD_REQUEST,
-                content={"status": False, "message": "Candidate with this email already exists."}
-            )
+        # if candidate_data:
+        #     return JSONResponse(
+        #         status_code=status.HTTP_400_BAD_REQUEST,
+        #         content={"status": False, "message": "Candidate with this email already exists."}
+        #     )
         candidate_id = await analyzer_service.add_candidate_info({
             "candidate_name": candidate_name,
             "user_id": user_id,
@@ -47,42 +49,42 @@ async def upload(
             "job_position": job_position
         })
 
-        suffix = os.path.splitext(resume.filename)[-1].lower()
-        with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
-            temp_file_path = tmp.name
-            content = await resume.read()
-            tmp.write(content)
+        # suffix = os.path.splitext(resume.filename)[-1].lower()
+        # with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
+        #     temp_file_path = tmp.name
+        #     content = await resume.read()
+        #     tmp.write(content)
 
         extracted_text = ""
 
-        # Process based on file type
-        if suffix == ".pdf":
-            doc = fitz.open(temp_file_path)
-            extracted_text = "".join(page.get_text("text") for page in doc)
-            doc.close()
+        # # Process based on file type
+        # if suffix == ".pdf":
+        #     doc = fitz.open(temp_file_path)
+        #     extracted_text = "".join(page.get_text("text") for page in doc)
+        #     doc.close()
 
-        elif suffix == ".docx":
-            extracted_text = extract_text_and_tables(temp_file_path)
+        # elif suffix == ".docx":
+        #     extracted_text = extract_text_and_tables(temp_file_path)
 
-        else:
-            os.remove(temp_file_path)
-            raise HTTPException(
-                status_code=400,
-                detail="Only PDF and DOCX resumes are supported right now."
-            )
+        # else:
+        #     os.remove(temp_file_path)
+        #     raise HTTPException(
+        #         status_code=400,
+        #         detail="Only PDF and DOCX resumes are supported right now."
+        #     )
 
-        # Cleanup temp file
-        os.remove(temp_file_path)
+        # # Cleanup temp file
+        # os.remove(temp_file_path)
 
-        response = await analyze_resume_with_gemini(job_description,extracted_text)
+        # response = await analyze_resume_with_gemini(job_description,extracted_text)
 
-        await analyzer_service.add_analyzed_data({
-            "candidate_id": candidate_id,
-            "user_id": user_id,
-            "resume_text": extracted_text,
-            "job_description": job_description,
-            "analyze_answer_response": response,
-        })
+        # await analyzer_service.add_analyzed_data({
+        #     "candidate_id": candidate_id,
+        #     "user_id": user_id,
+        #     "resume_text": extracted_text,
+        #     "job_description": job_description,
+        #     "analyze_answer_response": response,
+        # })
 
         candidate_id_str = str(candidate_id)
         process_job_task.delay(
@@ -92,17 +94,61 @@ async def upload(
         )
 
 
+        # result = {
+        #     "candidate_id": candidate_id_str,
+        #     "user_id": user_id,
+        #     "candidate_name": candidate_name,
+        #     "email": email,
+        #     "phone": phone,
+        #     "hr_name": hr_name,
+        #     "job_position": job_position,
+        #     "job_description": job_description,
+        #     "analysis": response, 
+        # }
+
         result = {
-            "candidate_id": candidate_id_str,
-            "user_id": user_id,
-            "candidate_name": candidate_name,
-            "email": email,
-            "phone": phone,
-            "hr_name": hr_name,
-            "job_position": job_position,
-            "job_description": job_description,
-            "analysis": response, 
+        "candidate_id": "68e6470c392eb9b2b3895ef4",
+        "user_id": "68e63751183642e3eff9fb96",
+        "candidate_name": "assssavvaa",
+        "email": "sssdaecfvfv@gmail.com",
+        "phone": "1212121212",
+        "hr_name": "meet",
+        "job_position": "developer",
+        "job_description": "data science",
+        "analysis": {
+            "match_score": 20,
+            "matched_skills": [
+                "Data Analysis",
+                "Data Visualization",
+                "Reporting",
+                "Power BI",
+                "Advanced Excel",
+                "Cognos"
+            ],
+            "missing_skills": [
+                "Machine Learning",
+                "Statistical Modeling",
+                "Python",
+                "R",
+                "SQL",
+                "Predictive Analytics",
+                "Big Data Technologies"
+            ],
+            "key_highlights": [
+                "Over 11 years of experience incorporating data analysis, data visualization, and BI reporting within the IT Asset Management domain.",
+                "Proficient with data analytics and BI tools such as Power BI, Advanced Excel, and Cognos.",
+                "Extensive experience in creating and managing KPI reports, dashboards (in Excel and ServiceNow), and conducting data reconciliation and gap analysis.",
+                "Developed a Hardware Asset Finance Portfolio Dashboard using Advanced Excel."
+            ],
+            "questions": [
+                "Your resume highlights strong data analysis and reporting skills within IT Asset Management. Can you describe how you would transition these skills to a broader data science context that might involve predictive modeling?",
+                "Can you provide an example of a complex business problem you solved using data analysis, and walk me through the steps you took, from data gathering to presenting your conclusions?",
+                "This role requires proficiency in tools commonly used in data science, such as Python or R. What is your experience with these programming languages and their data science libraries?",
+                "Describe a time you used data visualization to reveal an insight that was not obvious from the raw data. What tools did you use, and what was the impact of your discovery?",
+                "How do you ensure data quality and integrity in your analysis and reporting, particularly when dealing with data from multiple sources like SCCM, BigFix, or ServiceNow?"
+            ]
         }
+    },
 
         return JSONResponse(
             status_code=status.HTTP_200_OK,
@@ -378,12 +424,16 @@ async def get_technical_data(request: Request, candidate_uid: str = Query(...),c
         except Exception as e:
             print(f"Failed to store technical score for candidate {candidate_uid}: {e}")
         
+        print(final_data)
+        safe_data = jsonable_encoder(convert_objectids(final_data))
+
+
         return JSONResponse(
             status_code=status.HTTP_200_OK,
             content={
                 "status": True,
-                "user_id": user_id,                
-                "data": final_data,
+                "user_id": str(current_user["_id"]),         
+                "data": safe_data,
                 "message": " Questions fetched successfully"
             }
         )

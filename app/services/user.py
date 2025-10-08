@@ -1,10 +1,13 @@
 from fastapi import HTTPException
 from bson import ObjectId
 
-from app.utils.mongo import db
+from app.utils.mongo import get_db
 from app.schemas.user import UserSignUp
 
 class UserService:
+
+    def _db(self):
+        return get_db()
 
     # Get user using user id
     async def get_user_by_id(self, user_id)-> dict:
@@ -12,7 +15,7 @@ class UserService:
         Get user using user id
         """
         try:
-            user = await db.users.find_one({"_id": ObjectId(user_id)})
+            user = await self._db().users.find_one({"_id": ObjectId(user_id)})
             return user
         except Exception as e:
             raise
@@ -23,7 +26,7 @@ class UserService:
         Get user by email for signup
         """
         try:
-            user = await db.users.find_one({"email" : user_email})
+            user = await self._db().users.find_one({"email" : user_email})
             return user
         
         except Exception as e:
@@ -36,7 +39,7 @@ class UserService:
         """
         try:
             user_dict = user_data.dict()
-            result = await db.users.insert_one(user_dict)
+            result = await self._db().users.insert_one(user_dict)
             inserted_id = str(result.inserted_id)
             return inserted_id
         except Exception as e:
@@ -49,7 +52,7 @@ class UserService:
         Get user by email for login
         """
         try:
-            user = await db.users.find_one({"email": user_email})
+            user = await self._db().users.find_one({"email": user_email})
             if user is None:
                 raise HTTPException("User not found")
             return user

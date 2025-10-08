@@ -3,7 +3,7 @@ from datetime import datetime
 from typing import Optional
 
 
-from app.utils.mongo import db
+from app.utils.mongo import get_db
 from bson import ObjectId   
 
 

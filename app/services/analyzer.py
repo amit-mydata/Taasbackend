@@ -1,4 +1,4 @@
-from app.utils.mongo import db
+from app.utils.mongo import get_db
 from fastapi import HTTPException
 from app.models.analyzer import AddCandidate, AddAnalyzedData
 from bson import ObjectId
@@ -6,11 +6,14 @@ from bson import ObjectId
 
 class AnalyzerService:
 
+    def _db(self):
+        return get_db()
+
     async def add_candidate_info(self, candidate: dict) -> bool:        
         try:
             candidate_data = AddCandidate(**candidate).dict()
             candidate_data['user_id'] = ObjectId(candidate_data['user_id'])
-            result = await db.candidate.insert_one(candidate_data)
+            result = await self._db().candidate.insert_one(candidate_data)
             return str(result.inserted_id)
         except Exception as e:
             raise HTTPException(status_code=500, detail="Internal Server Error")
@@ -20,7 +23,7 @@ class AnalyzerService:
             analyzed_data = AddAnalyzedData(**analyzed_data).dict()
             analyzed_data['candidate_id'] = ObjectId(analyzed_data['candidate_id'])
             analyzed_data['user_id'] = ObjectId(analyzed_data['user_id'])
-            await db.analyzed_data.insert_one(analyzed_data)
+            await self._db().analyzed_data.insert_one(analyzed_data)
             return True
 
         except Exception as e:
@@ -41,7 +44,7 @@ class AnalyzerService:
             if communication_data is not None:
                 update_doc['$set']['communication_data'] = communication_data
 
-            result = await db.analyzed_data.update_one(
+            result = await self._db().analyzed_data.update_one(
                 query,
                 update_doc,
                 upsert=True
@@ -168,7 +171,7 @@ class AnalyzerService:
                 {"$limit": limit}
             ]
 
-            cursor = db.candidate.aggregate(pipeline)
+            cursor = self._db().candidate.aggregate(pipeline)
             results = []
 
             async for doc in cursor:
@@ -194,7 +197,7 @@ class AnalyzerService:
                 results.append(assessment)
 
             # Get total count for pagination
-            total_count = await db.candidate.count_documents({"is_deleted": False})
+            total_count = await self._db().candidate.count_documents({"is_deleted": False})
 
             return results, total_count
 
@@ -205,7 +208,7 @@ class AnalyzerService:
 
     async def add_communication_data(self, candidate_id: str, communication_data: dict) -> bool:
         try:
-            result = await db.analyzed_data.update_one(
+            result = await self._db().analyzed_data.update_one(
                 {"candidate_id": ObjectId(candidate_id), "communication_data": {"$exists": False}},  
                 {"$set": {"communication_data": communication_data}}
             )
@@ -223,7 +226,7 @@ class AnalyzerService:
 
     async def get_candidate_by_email(self, email: str) -> dict:
         try:
-            candidate = await db.candidate.find_one({"email": email, "is_deleted": False})
+            candidate = await self._db().candidate.find_one({"email": email, "is_deleted": False})
             if not candidate:
                 return None
             return candidate
@@ -232,7 +235,7 @@ class AnalyzerService:
         
     async def store_quiz_questions(self, candidate_uid: str, quiz_data: list) -> bool:
         try:
-            res = await db.analyzed_data.update_one(
+            res = await self._db().analyzed_data.update_one(
                 {"candidate_id": ObjectId(candidate_uid)},  # use correct field
                 {"$push": {"quiz_questions": {"$each": quiz_data}}},  # append instead of overwrite
                 upsert=True  # create if it doesn't exist
@@ -248,7 +251,7 @@ class AnalyzerService:
     async def get_quiz_question_by_id(self, candidate_uid: str, quiz_id: str) -> dict:
         try:
             
-            analyzed_data = await db.analyzed_data.find_one({"candidate_id": ObjectId(candidate_uid)})
+            analyzed_data = await self._db().analyzed_data.find_one({"candidate_id": ObjectId(candidate_uid)})
             if analyzed_data and "quiz_questions" in analyzed_data:
                 for question in analyzed_data["quiz_questions"]:
                     if str(question.get("quiz_id")) == str(quiz_id):
@@ -260,7 +263,7 @@ class AnalyzerService:
     async def get_quiz_questions(self,candidate_id: str):
         try:
 
-            result = await db.analyzed_data.find_one({"candidate_id": ObjectId(candidate_id)}, {"quiz_questions": 1, "_id": 0})
+            result = await self._db().analyzed_data.find_one({"candidate_id": ObjectId(candidate_id)}, {"quiz_questions": 1, "_id": 0})
             if result:
                 return result["quiz_questions"]
             else:
@@ -297,7 +300,7 @@ class AnalyzerService:
         
     async def get_score(self, candidate_id: str):
         try:
-            result = await db.analyzed_data.find_one(
+            result = await self._db().analyzed_data.find_one(
                 {"candidate_id": ObjectId(candidate_id)},
                 {"quiz_questions": 1, "_id": 0}  # Only return quiz_questions field
             )
@@ -331,7 +334,7 @@ class AnalyzerService:
         
     async def get_candidate_by_id(self, id: str) -> dict:
         try:
-            candidate = await db.candidate.find_one({"_id": ObjectId(id), "is_deleted": False})
+            candidate = await self._db().candidate.find_one({"_id": ObjectId(id), "is_deleted": False})
             candidate['_id'] = str(candidate['_id'])
             candidate['created_at'] = str(candidate['created_at'])
             candidate['updated_at'] = str(candidate['updated_at'])
