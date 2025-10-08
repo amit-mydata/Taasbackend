@@ -274,7 +274,7 @@ class AnalyzerService:
 
     async def save_score(self, candidate_id: str, quiz_id: str, score_type: str, score: float) -> bool:
         try:
-            res = await db.analyzed_data.update_one(
+            res = await self._db().analyzed_data.update_one(
                 {
                     "candidate_id": ObjectId(candidate_id),
                     "quiz_questions.quiz_id": quiz_id
@@ -319,7 +319,7 @@ class AnalyzerService:
         try:
 
             # Query the database
-            candidate = await db.analyzed_data.find_one(
+            candidate = await self._db().analyzed_data.find_one(
                 {"candidate_id": ObjectId(candidate_id), "is_deleted": False},
                 {"analyze_answer_response": 1, "communication_data": 1}  # Only return these fields
             )
@@ -343,3 +343,4 @@ class AnalyzerService:
             return candidate
         except Exception as e:
             raise HTTPException(status_code=500, detail="Internal Server Error")
+    
