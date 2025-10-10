@@ -79,6 +79,16 @@ async def upload(
 
         gemini_response = await analyze_resume_with_gemini(job_description,extracted_text)
         print(f"gemini_response: {gemini_response}")
+
+        if gemini_response is None:
+            return JSONResponse(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            content={
+                "status": False,
+                "message": "It looks like you’ve reached your AI usage limit. Please review your plan or update your billing details to restore access."
+            }
+        )
+            
         await analyzer_service.add_analyzed_data({
             "candidate_id": candidate_id,
             "user_id": user_id,

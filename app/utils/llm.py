@@ -8,6 +8,7 @@ from dotenv import load_dotenv
 from app.core.config import settings
 from pydantic import BaseModel, Field
 import asyncio
+from google.genai.errors import ClientError
 
 load_dotenv()
 
@@ -73,10 +74,13 @@ async def analyze_resume_with_gemini(job_description: str, resume_content: str):
         event = response.parsed
         data = [analyze.model_dump() for analyze in event]
         event_dict = data[0]
-        return event_dict
-    except:
-        logging.exception("Exception occurred in analyze_resume_with_gemini")
+        return event_dict       
+    except ClientError as e:
+        logging.error(f"Error in analyze_resume_with_gemini: {e}")
         return None
+    except Exception as e:
+        logging.exception("Exception occurred in analyze_resume_with_gemini")
+        raise 
     
 async def analyze_answer_with_gemini(answer_obj:dict):
     try:
