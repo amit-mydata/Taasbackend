@@ -41,14 +41,7 @@ async def upload(
                 status_code=status.HTTP_400_BAD_REQUEST,
                 content={"status": False, "message": "Candidate with this email already exists."}
             )
-        candidate_id = await analyzer_service.add_candidate_info({
-            "candidate_name": candidate_name,
-            "user_id": user_id,
-            "email": email,
-            "phone": phone,
-            "hr_name": hr_name,
-            "job_position": job_position
-        })
+        
 
         suffix = os.path.splitext(resume.filename)[-1].lower()
         with tempfile.NamedTemporaryFile(delete=False, suffix=suffix) as tmp:
@@ -89,6 +82,15 @@ async def upload(
             }
         )
             
+        candidate_id = await analyzer_service.add_candidate_info({
+            "candidate_name": candidate_name,
+            "user_id": user_id,
+            "email": email,
+            "phone": phone,
+            "hr_name": hr_name,
+            "job_position": job_position
+        })
+        
         await analyzer_service.add_analyzed_data({
             "candidate_id": candidate_id,
             "user_id": user_id,
